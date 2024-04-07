@@ -81,8 +81,12 @@ if SERVER then
 	end
 
 	function ENT:Initialize()
+
+
+		
 		self:SetModel( "models/dav0r/camera.mdl" )
 		self:DrawShadow( false )
+		self.Used = false
 		self:PhysicsInitMultiConvex( 
 		{
 			{ 
@@ -165,39 +169,55 @@ if SERVER then
 		
 		local ang = self:GetAngles()
 		ang.p = 0
-		local camposi = self:GetPos()
 		
 		self:SetDirVector( 1, ang:Forward() )
 		
 		ang:RotateAroundAxis( self:GetUp(), 180 )
 		self:SetDirVector( 2, ang:Forward() )
-		
-		self.IsArena = true
-		
-		self.Spectators = {}
-		
-		//just to be sure
-		constraint.Weld( self, game.GetWorld(), 0, 0, 0, false, false )
-		
-		
+
 	end
 	
 	function ENT:Use( activator )
 
-		if ( activator:IsPlayer() ) then 
+		if self.Used then return end
 
-			activator:EmitSound( "garrysmod/ui_click.wav" )
-			activator:EmitSound( "ui/achievement_earned.wav" )
-			activator:ScreenFade(SCREENFADE.OUT,Color(0,0,0),0.3,0.4)
+    if ( activator:IsPlayer() && activator:Alive() ) then 
 
-			timer.Simple( 0.3, function()
-				if IsValid( activator ) then
-					activator:ScreenFade(SCREENFADE.IN,Color(0,0,0),0.3,0.4)
-				end
-			end )
-		end
-	
+		local pos = self:GetPos()
+		local ang = self:GetAngles()
+		
+		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 42.5, 0, 0 ), pos, ang )
+
+        self.Used = false -- Determina sí se usa una vez o no
+        activator:EmitSound( "garrysmod/ui_click.wav" )
+        activator:EmitSound( "half_life_wars/round_start.wav" )
+        activator:ScreenFade(SCREENFADE.OUT,Color(0,0,0),0.3,0.4)
+
+        timer.Simple( 0.5, function()
+			if IsValid( activator ) then
+                activator:ScreenFade(SCREENFADE.IN,Color(0,0,0),0.3,0.4)
+				activator:SetPos(cam_pos)
+				activator:SetEyeAngles(cam_ang)
+				--activator:AllowFlashlight( false )
+				--activator:StripWeapons()
+				--activator:Spectate(5)
+            end
+        end )
+
+
+    end
 	end
+
+	function ENT:OnRemove()
+		local explosion = ents.Create( "env_explosion" ) -- The explosion entity
+		explosion:SetPos( self:GetPos() ) -- Put the position of the explosion at the position of the entity
+		explosion:Spawn() -- Spawn the explosion
+		explosion:SetKeyValue( "iMagnitude", "50" ) -- the magnitude of the explosion
+		explosion:Fire( "Explode", 0, 0 ) -- explode
+
+	end
+
+
 	function ENT:SetSpawnPos( slot, pl )
 		local pos = spawnpoints[ slot ]
 		
@@ -273,7 +293,6 @@ else
 		
 		end
 		
-		
 	end
 	
 	local wireframe = Material( "models/wireframe" )
@@ -298,7 +317,7 @@ else
 		local pos = self:GetPos()
 		local ang = self:GetAngles()
 		
-		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 0, 0, 0 ), pos, ang )
+		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 20, 0, 0 ), pos, ang )
 		
 		self:SetRenderOrigin( cam_pos )
 		self:SetRenderAngles( cam_ang )
@@ -322,10 +341,13 @@ else
 		local eyeang = EyeAngles()
 		eyeang:RotateAroundAxis( eyeang:Right(), 90 )
 		eyeang:RotateAroundAxis( eyeang:Up(), -90 )
-		
+		--Half life properties references (for some reason, gmod doesn't read the "actions" written with %%. So, I decided to implent this system)
+		hlw_press_start = language.GetPhrase("hlw.press.to.start"):gsub("+use", string.upper(input.LookupBinding( "+use" )))
+		hlw_press_exit = language.GetPhrase("hlw.press.to.exit"):gsub("+undo", string.upper(input.LookupBinding( "gmod_undo" )))
+
 		cam.Start3D2D( self:GetPos() + vector_up * 60, eyeang, 0.3)
-		draw.DrawText( "Press "..string.upper( input.LookupBinding( "+use", true ) or "e" ).." to join", "TargetIDSmall", 0, 0, color_white, TEXT_ALIGN_CENTER )
-		draw.DrawText( "Press "..string.upper( input.LookupBinding( "gmod_undo", true ) ).." to exit", "TargetIDSmall", 0, 20, color_white, TEXT_ALIGN_CENTER )
+		draw.DrawText( hlw_press_start, "TargetIDSmall", 0, 0, color_white, TEXT_ALIGN_CENTER )
+		draw.DrawText( hlw_press_exit, "TargetIDSmall", 0, 20, color_white, TEXT_ALIGN_CENTER )
 		cam.End3D2D()
 		
 		
