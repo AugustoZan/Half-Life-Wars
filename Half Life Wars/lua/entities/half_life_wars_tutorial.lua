@@ -1,5 +1,4 @@
 AddCSLuaFile()
-
 ENT.Base = "base_anim"
 ENT.RenderGroup = RENDERGROUP_BOTH
 
@@ -15,6 +14,9 @@ ENT.AdminOnly = false
 ENT.MessageBig = 1
 ENT.MessageMed = 2
 ENT.MessageSmall = 3
+
+local arena = net.ReadEntity()
+
 
 local arena_length = 4000
 local arena_width = 1800
@@ -43,7 +45,8 @@ local box4_max = Vector( 0, arena_length/2, arena_height )
 
 local box4_offset = Vector( -arena_width/2, 0, 0 )
 
-local cam_offset = Vector( -1100, 0, 500 )
+--local cam_offset = Vector( -1100, 0, 500 )
+local cam_offset = Vector( -1000, 0,100 )
 
 local cam_points = {
 	Vector( -arena_width/2, arena_length/2, 0 ),
@@ -81,9 +84,6 @@ if SERVER then
 	end
 
 	function ENT:Initialize()
-
-
-		
 		self:SetModel( "models/dav0r/camera.mdl" )
 		self:DrawShadow( false )
 		self.Used = false
@@ -182,51 +182,91 @@ if SERVER then
 		if self.Used then return end
 
     if ( activator:IsPlayer() && activator:Alive() ) then 
-
+        --self.Used = false -- Determina sí se usa una vez o no
 		local pos = self:GetPos()
 		local ang = self:GetAngles()
-		
-		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 42.5, 0, 0 ), pos, ang )
+		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 0, 0, 0 ), pos, ang )
 
-        self.Used = false -- Determina sí se usa una vez o no
         activator:EmitSound( "garrysmod/ui_click.wav" )
         activator:EmitSound( "half_life_wars/round_start.wav" )
         activator:ScreenFade(SCREENFADE.OUT,Color(0,0,0),0.3,0.4)
 
         timer.Simple( 0.5, function()
 			if IsValid( activator ) then
+				activator:SetMoveType( MOVETYPE_NONE)
                 activator:ScreenFade(SCREENFADE.IN,Color(0,0,0),0.3,0.4)
 				activator:SetPos(cam_pos)
 				activator:SetEyeAngles(cam_ang)
-				--activator:AllowFlashlight( false )
-				--activator:StripWeapons()
-				--activator:Spectate(5)
+				self:Tutorial(activator)
             end
         end )
-
 
     end
 	end
 
-	function ENT:OnRemove()
-		local explosion = ents.Create( "env_explosion" ) -- The explosion entity
-		explosion:SetPos( self:GetPos() ) -- Put the position of the explosion at the position of the entity
-		explosion:Spawn() -- Spawn the explosion
-		explosion:SetKeyValue( "iMagnitude", "50" ) -- the magnitude of the explosion
-		explosion:Fire( "Explode", 0, 0 ) -- explode
 
+	function ENT:Tutorial(ent)		
+		--ent:EmitSound("half_life_wars/round_start.wav")
+		ent:SetMoveType( MOVETYPE_PUSH )
+
+		ent:AllowFlashlight( false )
+		ent:StripWeapons()
+		local noArmas = false
+		local move_speed = 20
+		local initial_cam_ang = ent:EyeAngles()
+
+		hook.Add( "PlayerNoClip", "No_Clip", function( ent )
+			return false
+		end )
+
+		hook.Add( "Think", "Ply_Move", function()
+			if ( ent:KeyDown( IN_MOVERIGHT )) then
+				local newPos = ent:GetPos() + ent:GetRight() * move_speed 
+				ent:SetPos( newPos )
+	
+			elseif ( ent:KeyDown( IN_MOVELEFT ) ) then
+				local newPos = ent:GetPos() - ent:GetRight() * move_speed 
+				ent:SetPos( newPos )
+			end
+			ent:SetEyeAngles(initial_cam_ang)
+		end )
+	
+
+		undo.Create( "Tutorial Mode Activated" )
+		undo.SetPlayer( ent )
+		undo.SetCustomUndoText( "The Tutorial Mode has been cancelled" )
+		undo.AddFunction( function( tab, arena, pl, sl )
+				ent:AllowFlashlight( true )
+				ent:SetMoveType( MOVETYPE_WALK )
+				hook.Remove("Think", "Ply_Move")
+				hook.Remove("PlayerNoClip", "No_Clip")
+				if noArmas == false then --No me importa sí el jugador tenía removida estas armas o no.
+					ent:Give("weapon_physgun")
+					ent:Give("weapon_crowbar")
+					ent:Give("weapon_physcannon")
+					ent:Give("weapon_pistol")
+					ent:Give("weapon_357")
+					ent:Give("weapon_smg1")
+					ent:Give("weapon_ar2")
+					ent:Give("weapon_shotgun")
+					ent:Give("weapon_crossbow")
+					ent:Give("weapon_frag")
+					ent:Give("weapon_rpg")
+					ent:Give("gmod_camera")
+					ent:Give("gmod_tool")
+					noArmas = true
+				end
+				--hook.Remove("Think", "Ply_Weapons")
+				if arena and arena:IsValid() and pl and pl:IsValid() and sl then
+					if arena:GetPlayer( sl ) == pl then
+						arena:RemovePlayer( sl )
+					end
+				end
+			end, self.Entity, ent, slot )
+		undo.Finish()
+	
 	end
 
-
-	function ENT:SetSpawnPos( slot, pl )
-		local pos = spawnpoints[ slot ]
-		
-		if pos then
-			local new_pos = LocalToWorld( pos, Angle( 0, 0, 0 ) , cam_offset, Angle( -20, 45, -100 ))
-			pl:SetPos( new_pos )
-		end
-		
-	end
 	//prevents player from getting stuck inside the arena itself (or outside)
 	function ENT:ConvertIntoSafePos( pos )
 		
@@ -317,8 +357,9 @@ else
 		local pos = self:GetPos()
 		local ang = self:GetAngles()
 		
-		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 20, 0, 0 ), pos, ang )
-		
+		--local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 20, 0, 0 ), pos, ang )
+		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 0, 0, 0 ), pos, ang )
+
 		self:SetRenderOrigin( cam_pos )
 		self:SetRenderAngles( cam_ang )
 		
@@ -349,7 +390,7 @@ else
 		draw.DrawText( hlw_press_start, "TargetIDSmall", 0, 0, color_white, TEXT_ALIGN_CENTER )
 		draw.DrawText( hlw_press_exit, "TargetIDSmall", 0, 20, color_white, TEXT_ALIGN_CENTER )
 		cam.End3D2D()
-		
+
 		
 	end
 	
