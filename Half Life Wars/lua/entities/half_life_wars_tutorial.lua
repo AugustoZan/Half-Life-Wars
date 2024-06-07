@@ -16,7 +16,10 @@ ENT.MessageMed = 2
 ENT.MessageSmall = 3
 
 local arena = net.ReadEntity()
+------------------------------------------------------------------------------------------------------------------------------------------
 
+
+---------------------------------------------------------------------------------------------------------------------------------------------
 
 local arena_length = 4000
 local arena_width = 1800
@@ -60,7 +63,123 @@ local spawnpoints = {
 	[2] = Vector( arena_width/3, 0, 15 ),
 }
 
+function ENT:Use( activator )
 
+	if self.Used then return end
+
+if ( activator:IsPlayer() && activator:Alive() ) then 
+	self.Used = true -- Determina sí se usa una vez o no
+	local pos = self:GetPos()
+	local ang = self:GetAngles()
+	local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 0, 0, 0 ), pos, ang )
+
+	activator:EmitSound( "garrysmod/ui_click.wav" )
+	activator:EmitSound( "half_life_wars/round_start.wav" )
+	activator:ScreenFade(SCREENFADE.OUT,Color(0,0,0),0.3,0.4)
+
+	timer.Simple( 0.5, function()
+		if IsValid( activator ) then
+			activator:SetMoveType( MOVETYPE_NONE)
+			activator:ScreenFade(SCREENFADE.IN,Color(0,0,0),0.3,0.4)
+			activator:SetPos(cam_pos)
+			activator:SetEyeAngles(cam_ang)
+			self:Tutorial(activator)
+		end
+	end )
+
+end
+end
+
+function ENT:Tutorial(ent)		
+	--ent:EmitSound("half_life_wars/round_start.wav")
+	local initial_cam_ang = ent:EyeAngles()
+	local playerPos = ent:GetPos()
+    ent:GodEnable()
+    ent:AddFlags(FL_NOTARGET)
+	ent:AddFlags(FL_NOTARGET)
+	ent:SetMoveType( MOVETYPE_PUSH )
+	ent:AllowFlashlight( false )
+	ent:StripWeapons()
+	ent:SetNoDraw(true)
+	ent:Give("gmod_camera") -- es la unica forma que encontré para remover el HUD.
+	local noArmas = false
+	local move_speed = 20
+	self:SetDTBool(0, true) -- Establece Draw() en false
+	hook.Add( "PlayerNoClip", "No_Clip", function( ent )
+		return false
+	end )
+
+	hook.Add("PlayerDeath", "TutorialDeathHook", function(victim) -- Sí el jugador llega a morir (probablemente utilice la consola para hacerlo), se destruye la estatua automáticamente
+		--Si jugador muerto: Código para destruir la estatua :v
+		return true
+	end)
+
+	hook.Add( "Think", "Ply_Move", function()
+		if ( ent:KeyDown( IN_MOVERIGHT )) then
+			local newPos = ent:GetPos() + ent:GetRight() * move_speed 
+			ent:SetPos( newPos )
+
+		elseif ( ent:KeyDown( IN_MOVELEFT ) ) then
+			local newPos = ent:GetPos() - ent:GetRight() * move_speed 
+			ent:SetPos( newPos )
+		end
+		ent:SetEyeAngles(initial_cam_ang)
+	end )
+
+    hook.Add("Think", "LimitPlayerMovement", function()
+        local pos = ent:GetPos()
+        local distance = (pos - playerPos):Length()
+
+        if distance > 1800 then
+            -- Mover al jugador de vuelta a una posición segura
+            local dir = (pos - playerPos):GetNormal()
+            ent:SetPos(playerPos + dir * 1800)
+        end
+	end)
+
+	undo.Create( "Tutorial Mode Activated" )
+	undo.SetPlayer( ent )
+	undo.SetCustomUndoText( "The Tutorial Mode has been cancelled" )
+	undo.AddFunction( function( tab, arena, pl, sl )
+			ent:RemoveFlags(FL_NOTARGET)
+			ent:GodDisable()
+			ent:SetPos(self:GetPos())
+			ent:AllowFlashlight( true )
+			ent:SetMoveType( MOVETYPE_WALK )
+			ent:SetNoDraw(false)
+			hook.Remove("Think", "Ply_Move")
+			hook.Remove("Think", "LimitPlayerMovement")
+			hook.Remove("PlayerNoClip", "No_Clip")
+			hook.Remove("PlayerDeath", "TutorialDeathHook")
+			ent:StripWeapon("gmod_camera") -- quito la cámara para que el jugador vea de nuevo el HUD.
+			if noArmas == false then --No me importa sí el jugador tenía removida estas armas o no.
+				ent:Give("weapon_physgun")
+				ent:Give("weapon_crowbar")
+				ent:Give("weapon_physcannon")
+				ent:Give("weapon_pistol")
+				ent:Give("weapon_357")
+				ent:Give("weapon_smg1")
+				ent:Give("weapon_ar2")
+				ent:Give("weapon_shotgun")
+				ent:Give("weapon_crossbow")
+				ent:Give("weapon_frag")
+				ent:Give("weapon_rpg")
+				ent:Give("gmod_camera")
+				ent:Give("gmod_tool")
+				noArmas = true
+			end
+			self:SetDTBool(0, false)
+			self.Used = false -- Permite que el jugador pueda volver a utilizar la arena
+
+			if arena and arena:IsValid() and pl and pl:IsValid() and sl then
+				if arena:GetPlayer( sl ) == pl then
+					arena:RemovePlayer( sl )
+				end
+			end
+		end, self.Entity, ent, slot )
+	undo.Finish()
+
+end
 if SERVER then
 
 	function ENT:SpawnFunction( pl, tr, classname )
@@ -84,6 +203,7 @@ if SERVER then
 	end
 
 	function ENT:Initialize()
+		
 		self:SetModel( "models/dav0r/camera.mdl" )
 		self:DrawShadow( false )
 		self.Used = false
@@ -160,7 +280,7 @@ if SERVER then
 
 		self:PhysWake()
 		
-		self:SetUseType( SIMPLE_USE ) 
+		self:SetUseType( SIMPLE_USE )
 		
 		local phys = self:GetPhysicsObject()
 		if phys and phys:IsValid() then
@@ -175,97 +295,11 @@ if SERVER then
 		ang:RotateAroundAxis( self:GetUp(), 180 )
 		self:SetDirVector( 2, ang:Forward() )
 
+		constraint.Weld( self, game.GetWorld(), 0, 0, 0, false, false ) --Evita que la arena se genere fuera del mundo
 	end
 	
-	function ENT:Use( activator )
-
-		if self.Used then return end
-
-    if ( activator:IsPlayer() && activator:Alive() ) then 
-        --self.Used = false -- Determina sí se usa una vez o no
-		local pos = self:GetPos()
-		local ang = self:GetAngles()
-		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 0, 0, 0 ), pos, ang )
-
-        activator:EmitSound( "garrysmod/ui_click.wav" )
-        activator:EmitSound( "half_life_wars/round_start.wav" )
-        activator:ScreenFade(SCREENFADE.OUT,Color(0,0,0),0.3,0.4)
-
-        timer.Simple( 0.5, function()
-			if IsValid( activator ) then
-				activator:SetMoveType( MOVETYPE_NONE)
-                activator:ScreenFade(SCREENFADE.IN,Color(0,0,0),0.3,0.4)
-				activator:SetPos(cam_pos)
-				activator:SetEyeAngles(cam_ang)
-				self:Tutorial(activator)
-            end
-        end )
-
-    end
-	end
 
 
-	function ENT:Tutorial(ent)		
-		--ent:EmitSound("half_life_wars/round_start.wav")
-		ent:SetMoveType( MOVETYPE_PUSH )
-
-		ent:AllowFlashlight( false )
-		ent:StripWeapons()
-		local noArmas = false
-		local move_speed = 20
-		local initial_cam_ang = ent:EyeAngles()
-
-		hook.Add( "PlayerNoClip", "No_Clip", function( ent )
-			return false
-		end )
-
-		hook.Add( "Think", "Ply_Move", function()
-			if ( ent:KeyDown( IN_MOVERIGHT )) then
-				local newPos = ent:GetPos() + ent:GetRight() * move_speed 
-				ent:SetPos( newPos )
-	
-			elseif ( ent:KeyDown( IN_MOVELEFT ) ) then
-				local newPos = ent:GetPos() - ent:GetRight() * move_speed 
-				ent:SetPos( newPos )
-			end
-			ent:SetEyeAngles(initial_cam_ang)
-		end )
-	
-
-		undo.Create( "Tutorial Mode Activated" )
-		undo.SetPlayer( ent )
-		undo.SetCustomUndoText( "The Tutorial Mode has been cancelled" )
-		undo.AddFunction( function( tab, arena, pl, sl )
-				ent:AllowFlashlight( true )
-				ent:SetMoveType( MOVETYPE_WALK )
-				hook.Remove("Think", "Ply_Move")
-				hook.Remove("PlayerNoClip", "No_Clip")
-				if noArmas == false then --No me importa sí el jugador tenía removida estas armas o no.
-					ent:Give("weapon_physgun")
-					ent:Give("weapon_crowbar")
-					ent:Give("weapon_physcannon")
-					ent:Give("weapon_pistol")
-					ent:Give("weapon_357")
-					ent:Give("weapon_smg1")
-					ent:Give("weapon_ar2")
-					ent:Give("weapon_shotgun")
-					ent:Give("weapon_crossbow")
-					ent:Give("weapon_frag")
-					ent:Give("weapon_rpg")
-					ent:Give("gmod_camera")
-					ent:Give("gmod_tool")
-					noArmas = true
-				end
-				--hook.Remove("Think", "Ply_Weapons")
-				if arena and arena:IsValid() and pl and pl:IsValid() and sl then
-					if arena:GetPlayer( sl ) == pl then
-						arena:RemovePlayer( sl )
-					end
-				end
-			end, self.Entity, ent, slot )
-		undo.Finish()
-	
-	end
 
 	//prevents player from getting stuck inside the arena itself (or outside)
 	function ENT:ConvertIntoSafePos( pos )
@@ -293,8 +327,8 @@ if SERVER then
 		self:SetDTVector( slot, vec )
 	end
 	
-		
 	
+ ----------------------------------------------------------------------------------------------------------------------------------------------
 else
 		
 
@@ -339,7 +373,8 @@ else
 	local wire_col = Color( 255, 255, 255)
 	
 	function ENT:Draw()
-		
+		local INVISIBLEARENA = self:GetDTBool(0)
+		if INVISIBLEARENA == false then
 		local pl = LocalPlayer()
 		
 		self:SetRenderBounds( Vector( -400, -400, 0 ), Vector( 400, 400, 200 ) )
@@ -357,7 +392,7 @@ else
 		local pos = self:GetPos()
 		local ang = self:GetAngles()
 		
-		--local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 20, 0, 0 ), pos, ang )
+
 		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 0, 0, 0 ), pos, ang )
 
 		self:SetRenderOrigin( cam_pos )
@@ -390,8 +425,7 @@ else
 		draw.DrawText( hlw_press_start, "TargetIDSmall", 0, 0, color_white, TEXT_ALIGN_CENTER )
 		draw.DrawText( hlw_press_exit, "TargetIDSmall", 0, 20, color_white, TEXT_ALIGN_CENTER )
 		cam.End3D2D()
-
-		
+		end
 	end
 	
 
