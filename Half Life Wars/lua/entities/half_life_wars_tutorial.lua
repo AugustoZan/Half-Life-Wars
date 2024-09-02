@@ -67,30 +67,32 @@ function ENT:Use( activator )
 
 	if self.Used then return end
 
-if ( activator:IsPlayer() && activator:Alive() ) then 
-	self.Used = true -- Determina sí se usa una vez o no
-	local pos = self:GetPos()
-	local ang = self:GetAngles()
-	local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 0, 0, 0 ), pos, ang )
+	if ( activator:IsPlayer() && activator:Alive() ) then 
+		self.Used = true -- Determina sí se usa una vez o no
+		local pos = self:GetPos()
+		local ang = self:GetAngles()
+		local cam_pos, cam_ang = LocalToWorld( cam_offset, Angle( 0, 0, 0 ), pos, ang )
 
-	activator:EmitSound( "garrysmod/ui_click.wav" )
-	activator:EmitSound( "half_life_wars/round_start.wav" )
-	activator:ScreenFade(SCREENFADE.OUT,Color(0,0,0),0.3,0.4)
+		activator:EmitSound( "garrysmod/ui_click.wav" )
+		activator:EmitSound( "half_life_wars/round_start.wav" )
+		activator:ScreenFade(SCREENFADE.OUT,Color(0,0,0),0.3,0.4)
 
-	timer.Simple( 0.5, function()
-		if IsValid( activator ) then
-			activator:SetMoveType( MOVETYPE_NONE)
-			activator:ScreenFade(SCREENFADE.IN,Color(0,0,0),0.3,0.4)
-			activator:SetPos(cam_pos)
-			activator:SetEyeAngles(cam_ang)
-			self:Tutorial(activator)
-		end
-	end )
+		timer.Simple( 0.5, function()
+			if IsValid( activator ) then
+				activator:SetMoveType( MOVETYPE_NONE)
+				activator:ScreenFade(SCREENFADE.IN,Color(0,0,0),0.3,0.4)
+				activator:SetPos(cam_pos)
+				--activator:SetPos(activator:GetRight() * -1500)
+				activator:SetEyeAngles(cam_ang)
+				self:Tutorial(activator)
 
+			end
+		end )
+
+	end
 end
-end
 
-function ENT:Tutorial(ent)		
+function ENT:StartRound(ent, estatua, deskProps, deskProp)		
 	--ent:EmitSound("half_life_wars/round_start.wav")
 	local initial_cam_ang = ent:EyeAngles()
 	local playerPos = ent:GetPos()
@@ -101,7 +103,7 @@ function ENT:Tutorial(ent)
 	ent:AllowFlashlight( false )
 	ent:StripWeapons()
 	ent:SetNoDraw(true)
-	ent:Give("gmod_camera") -- es la unica forma que encontré para remover el HUD.
+	--ent:Give("gmod_camera") -- es la unica forma que encontré para remover el HUD.
 	local noArmas = false
 	local move_speed = 20
 	self:SetDTBool(0, true) -- Establece Draw() en false
@@ -136,11 +138,19 @@ function ENT:Tutorial(ent)
             ent:SetPos(playerPos + dir * 1800)
         end
 	end)
-
-	undo.Create( "Tutorial Mode Activated" )
+	undo.Create( "Round Started" )
 	undo.SetPlayer( ent )
-	undo.SetCustomUndoText( "The Tutorial Mode has been cancelled" )
+	undo.SetCustomUndoText( "Interrupted round" )
 	undo.AddFunction( function( tab, arena, pl, sl )
+			if SERVER then
+				util.AddNetworkString("RemoveImage")
+				net.Start("RemoveImage")
+				net.Send(ent)
+			end
+			estatua:Remove()
+			for i, deskProps in ipairs(deskProps) do
+				deskProps:Remove()
+			end
 			ent:RemoveFlags(FL_NOTARGET)
 			ent:GodDisable()
 			ent:SetPos(self:GetPos())
@@ -180,8 +190,87 @@ function ENT:Tutorial(ent)
 	undo.Finish()
 
 end
-if SERVER then
+function ENT: Tutorial(ent)
+	local rebelSupplies = 225
+	local rebelPopulation = 0
+	local rebelPopulationTotal = 50
+	local estatua = ents.Create("npc_hlw_statue")
+	local deskProp = nil
+	local deskPositions = {
+		self:GetPos() + self:GetRight() * -1250 + self:GetForward() * 400 + self:GetUp() *-10,
+		self:GetPos() + self:GetRight() * -1250 + self:GetForward() * -400 + self:GetUp() *-10,
+		self:GetPos() + self:GetRight() * -1450 + self:GetForward() * 200 + self:GetUp() *-10,
+		self:GetPos() + self:GetRight() * -1450 + self:GetForward() * -200 + self:GetUp() *-10
+	}
+	
+	local deskProps = {}
+	
+	for i, pos in ipairs(deskPositions) do
+		deskProp = ents.Create("hlw_computer")
+		deskProp:SetPos(pos) -- Ahora pos es un vector
+		deskProp:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
+		deskProp:Spawn()
+		table.insert(deskProps, deskProp)
+	end
+	self:StartRound(ent, estatua, deskProps, deskProp)
+    estatua:SetPos(self:GetPos() + self:GetRight() * -1600 + self:GetUp() * 40)
+	ent:SetPos(ent:GetPos() + self:GetRight() * -1600)
+    estatua:Spawn()
+	estatua:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
+    
+	timer.Simple(0.45, function()
+        if SERVER then
+            util.AddNetworkString("DrawImage")
+            net.Start("DrawImage")
+			net.WriteInt(rebelSupplies, 32)
+			net.WriteInt(rebelPopulation, 7)
+			net.WriteInt(rebelPopulationTotal, 8)
+            net.Send(ent)	
+        end
+    end)
+	
+	timer.Simple(3, function()
+		if self:IsValid() then
+			self:PhaseI(ent)
+		end
 
+    end)
+end
+
+function ENT:PhaseI(ent)
+    local moveLeft = false
+    local moveRight = false
+
+	local function checkMovement()
+		if ent:KeyDown(IN_MOVELEFT) then
+			moveLeft = true
+		end
+		if ent:KeyDown(IN_MOVERIGHT) then
+			moveRight = true
+		end
+
+		if moveLeft and moveRight then
+			-- Aquí puedes agregar la lógica para avanzar al siguiente paso del tutorial
+			hook.Remove("Think", "CheckMovement")
+			if self:IsValid() then
+				timer.Simple(0.8, function()
+					self:PhaseII(ent)
+				end)
+			end
+		end
+	end
+	hook.Add("Think", "CheckMovement", checkMovement)
+
+end
+function ENT:PhaseII(ent)
+	if SERVER then
+		util.AddNetworkString("PhaseII")
+		net.Start("PhaseII")
+		net.Send(ent)
+	end
+end
+if SERVER then
+	
 	function ENT:SpawnFunction( pl, tr, classname )
 
 		if ( !tr.Hit ) then return end
@@ -274,7 +363,7 @@ if SERVER then
 		} )
 		self:SetCollisionGroup( COLLISION_GROUP_PLAYER )
 		self:SetSolid( SOLID_VPHYSICS  )
-		self:SetMoveType( MOVETYPE_VPHYSICS  )
+		self:SetMoveType( MOVETYPE_NONE  )
 
 		self:EnableCustomCollisions( true )
 
@@ -327,7 +416,18 @@ if SERVER then
 		self:SetDTVector( slot, vec )
 	end
 	
-	
+	function ENT:Think()
+		util.AddNetworkString( "hi_citizen" )
+		net.Receive( "hi_citizen", function( len, ply )
+			print( "XD" )
+			local hiCitizen = ents.Create("npc_hlw_citizen")
+			hiCitizen:SetPos(self:GetPos())
+			--hiCitizen:SetPos(self:GetPos() * -400 + self:GetRight() * -1600 + self:GetUp() * 5)
+			hiCitizen:Spawn()
+			--hiCitizen:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
+		end )
+	end
+
  ----------------------------------------------------------------------------------------------------------------------------------------------
 else
 		
@@ -427,6 +527,291 @@ else
 		cam.End3D2D()
 		end
 	end
+
+end
+if CLIENT then
+
+	net.Receive("DrawImage", function(len)
+		local rebelSupply = net.ReadInt(32) -- Leer el entero de 32 bits
+		local rPopulation = net.ReadInt(7)
+		local rPopulationTotal = net.ReadInt(8)
+		local ent = net.ReadEntity()
+
+		local bar = vgui.Create("DImage")
+		local supplyIcon = vgui.Create("DImage")
+		local populationIcon = vgui.Create("DImage")
+		local tutorialIcon = vgui.Create("DImage")
+		local texto = vgui.Create("DLabel") -- Crear un DLabel para el texto
+		bar:SetImage("half life wars resource/resistance_bar.png")
+		bar:SetSize(1366, 768)
+		bar:SetPos(0, 0) -- Inicialmente, la imagen está fuera de la pantalla a la derecha
+		supplyIcon:SetImage("half life wars resource/supply.png")
+		supplyIcon:SetSize(36, 36)
+		supplyIcon:SetPos(900, 10)
+		populationIcon:SetImage("half life wars resource/population.png")
+		populationIcon:SetSize(30, 40)
+		populationIcon:SetPos(905, 45)
+		tutorialIcon:SetImage("half life wars resource/tutorial.png")
+		tutorialIcon:SetSize(696, 266)
+		tutorialIcon:SetPos(ScrW() + tutorialIcon:GetWide(), 400)
+		
+		local gmanIcon = vgui.Create("DImage")
+		gmanIcon:SetImage("half life wars resource/gman.png")
+		gmanIcon:SetSize(223, 219)
+		gmanIcon:SetPos(100, 475)
+		
+		local citizenIcon = vgui.Create("DImageButton")
+
+		local arrowIcon = vgui.Create("DImage")
+
+		local rebelSuppliesLabel = vgui.Create("DLabel")
+		rebelSuppliesLabel:SetText(rebelSupply)
+		rebelSuppliesLabel:SetFont("CloseCaption_Bold")
+		rebelSuppliesLabel:SetColor(Color(255, 255, 255))
+		rebelSuppliesLabel:SizeToContents()
+		rebelSuppliesLabel:SetPos(940, 13)
+
+		local rebelPopulationLabel = vgui.Create("DLabel")
+		rebelPopulationLabel:SetText(rPopulation .. "/" .. rPopulationTotal)
+		rebelPopulationLabel:SetFont("CloseCaption_Bold")
+		rebelPopulationLabel:SetColor(Color(255, 255, 255))
+		rebelPopulationLabel:SizeToContents()
+		rebelPopulationLabel:SetPos(940, 53)
+
+		local citizenAmount = 0
+
+		hlw_tutorial_move = language.GetPhrase("hlw.tutorial.move"):gsub("+moveright", string.upper(input.LookupBinding( "+moveright" )))
+		hlw_tutorial_move2 = language.GetPhrase("hlw.tutorial.move2"):gsub("+moveleft", string.upper(input.LookupBinding( "+moveleft" )))
+		texto:SetText(hlw_tutorial_move .. " " .. hlw_tutorial_move2)
+		texto:SetFont("CloseCaption_Bold") -- Establecer la fuente del texto
+		texto:SetColor(Color(255, 255, 255)) -- Establecer el color del texto
+		texto:SizeToContents()
+		texto:SetPos(ScrW() + texto:GetWide() + 15, 475)
+		local animTime = 0.5 -- Tiempo de animación en segundos
+		local startTime = CurTime() -- Tiempo de inicio de la animación
+		local currentTime = CurTime()
+		local progress = (currentTime - startTime) / animTime
+		local newX = Lerp(progress, ScrW() + tutorialIcon:GetWide(), ScrW() / 2 - tutorialIcon:GetWide() / 2) 
+		-- Función Think para actualizar la posición de la imagen
+		local function thinkOriginal()
+			currentTime = CurTime()
+			progress = (currentTime - startTime) / animTime
+			newX = Lerp(progress, ScrW() + tutorialIcon:GetWide(), ScrW() / 2 - tutorialIcon:GetWide() / 2) -- Interpolar entre la posición inicial y la posición final
+			tutorialIcon:SetPos(newX, 450)
+			texto:SetPos(newX + 30, 475)
+			if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
+				tutorialIcon.Think = nil
+				texto.Think = nil
+			end
+
+			local function thinkFadeIn()
+				currentTime = CurTime()
+				progress = (currentTime - startTime) / animTime
+				alpha = Lerp(progress, 0, 255) -- Interpolar entre la transparencia inicial (0) y la transparencia final (255)
+				gmanIcon:SetAlpha(alpha)
+				if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
+					gmanIcon.Think = nil
+				end
+			end
+			thinkFadeIn()
+		end
 	
+		tutorialIcon.Think = thinkOriginal -- Asignar la función Think original a la imagen
+		texto.Think = thinkOriginal
+		net.Receive("PhaseII", function()
+			surface.PlaySound("buttons/button14.wav")
+			local animTime = 0.5 -- Tiempo de animación en segundos
+			local startTime = CurTime() -- Tiempo de inicio de la animación
+		
+			-- Función Think para actualizar la posición de la imagen
+			local function thinkExit()
+				local currentTime = CurTime()
+				local progress = (currentTime - startTime) / animTime
+				local _, posY = tutorialIcon:GetPos()
+				local startX, _ = tutorialIcon:GetPos() -- Obtener la posición x inicial de tutorialIcon
+				local newX = Lerp(progress, startX, -tutorialIcon:GetWide()) -- Interpolar hacia la izquierda
+				tutorialIcon:SetPos(newX, posY) -- Asignar la nueva posición x y la posición y actual de tutorialIcon
+				
+				local _, posYTexto = texto:GetPos()
+				local startXTexto, _ = texto:GetPos() -- Obtener la posición x inicial de texto
+				local newXTexto = Lerp(progress, startXTexto, -texto:GetWide()) -- Interpolar hacia la izquierda
+				texto:SetPos(newXTexto, posYTexto) -- Asignar la nueva posición x y la posición y actual de texto
+				
+				if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
+					tutorialIcon.Think = nil
+					texto.Think = nil
+				end
+			end
+			if tutorialIcon:IsValid() and texto:IsValid() then
+				tutorialIcon.Think = thinkExit -- Asignar la función ThinkExit a la imagen
+				texto.Think = thinkExit
+			end
+
+			local function effectCitizenButton()
+				currentTime = CurTime()
+				progress = (currentTime - startTime) / animTime
+				alpha = Lerp(progress, 0, 255) -- Interpolar entre la transparencia inicial (0) y la transparencia final (255)
+				citizenIcon:SetAlpha(alpha)
+				if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
+					citizenIcon.Think = nil
+				end
+			end
+			local function effectArrowButton()
+				local startY = 150
+				local endY = 170
+				local speed = 8
+				local animTime = 0.5
+				local startTime = CurTime()
+			
+				local function think()
+					local currentTime = CurTime()
+					local progress = (currentTime - startTime) / animTime
+					local alpha = Lerp(progress, 0, 255) -- Interpolar entre la transparencia inicial (0) y la transparencia final (255)
+					arrowIcon:SetAlpha(alpha)
+			
+					local newY = startY + (endY - startY) * math.sin((currentTime * speed) % (math.pi * 2))
+					arrowIcon:SetPos(45, newY)
+				end
+			
+				arrowIcon.Think = think
+			end
+			timer.Simple(0.3, function()
+
+				if tutorialIcon:IsValid() and texto:IsValid()  then
+					startTime = CurTime()
+					texto:SetText(language.GetPhrase("hlw.tutorial.citizen"))
+					local function thinkOriginalII()
+						currentTime = CurTime()
+						progress = (currentTime - startTime) / animTime
+						newX = Lerp(progress, ScrW() + tutorialIcon:GetWide(), ScrW() / 2 - tutorialIcon:GetWide() / 2) -- Interpolar entre la posición inicial y la posición final
+						tutorialIcon:SetPos(newX, 450)
+						texto:SetPos(newX + 30, 435)
+						if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
+							tutorialIcon.Think = nil
+							texto.Think = nil
+						end
+					end
+					tutorialIcon.Think = thinkOriginalII -- Llamar a la función Think original nuevamente
+					texto.Think = thinkOriginalII
+
+					citizenIcon:SetImage("half life wars resource/supplier.png")
+					citizenIcon:SetSize(150, 128)
+					citizenIcon:SetPos(20, 10)
+					citizenIcon.Think = effectCitizenButton
+					citizenIcon:MakePopup()
+					citizenIcon:SetKeyboardInputEnabled(false)
+					
+					local cooldown = vgui.Create("DImage")
+					cooldown:SetImage("half life wars resource/cooldown/cd.png")
+					cooldown:SetAlpha(245)
+					cooldown:SetSize(220, 125)
+					cooldown:SetPos(-33, -5)
+					cooldown:SetParent(citizenIcon)
+					cooldown:SetVisible(false)
+
+					local citizenCooldown = vgui.Create("DLabel")
+					citizenCooldown:SetText(citizenAmount)
+					citizenCooldown:SetFont("DermaLarge")
+					citizenCooldown:SetColor(Color(255, 255, 255))
+					citizenCooldown:SizeToContents()
+					citizenCooldown:SetPos(70, 42)
+					citizenCooldown:SetParent(citizenIcon)
+					citizenCooldown:SetVisible(false)
+
+					citizenIcon.DoClick = function()
+						arrowIcon:Remove()
+						if rebelSupply >= 150 and (rPopulation + 1) <= rPopulationTotal then --rPopulation + la cantidad de población que ocupa la unidad. Citizen ocupa 1
+							surface.PlaySound( "UI/buttonclickrelease.wav" )
+							rebelSupply = rebelSupply - 150
+							rPopulation = rPopulation + 1
+							rebelSuppliesLabel:SetText(rebelSupply)
+							rebelPopulationLabel:SetText(rPopulation .. "/" .. rPopulationTotal)
+							cooldown:SetVisible(true)
+							cooldown:SetMouseInputEnabled(false)
+							citizenCooldown:SetMouseInputEnabled(false)
+							citizenAmount = citizenAmount + 1
+							
+							local frameCount = 19
+							local currentFrame = 1
+							timer.Simple(12, function()
+								if citizenIcon:IsValid() then
+									citizenAmount = citizenAmount - 1
+									surface.PlaySound( "Half_Life_Wars/unit_ready.wav" )
+									net.Start( "hi_citizen" )
+								net.SendToServer()
+								end
+							end)
+							local function animate()
+								if citizenIcon:IsValid() and citizenAmount != 0 then
+									citizenCooldown:SetText(citizenAmount)
+									citizenCooldown:SetVisible(true)
+									if currentFrame == 1 then
+										cooldown:SetImage("half life wars resource/cooldown/cd.png")
+									else
+										cooldown:SetImage("half life wars resource/cooldown/cd" .. currentFrame .. ".png")
+									end
+									currentFrame = (currentFrame % frameCount) + 1
+									timer.Simple(12 / 19, animate) -- segundos aproximados que cambia el frame
+								elseif citizenIcon: IsValid() and citizenAmount == 0 then
+									citizenCooldown:SetVisible(false)
+									cooldown:SetVisible(false)
+								end
+							end
+							
+							animate()
+						elseif rebelSupply < 150 then
+								local warningSupplies = vgui.Create("DLabel")
+								warningSupplies:SetText(language.GetPhrase("hlw.warning.supply"))
+								warningSupplies:SetFont("CloseCaption_Bold")
+								warningSupplies:SetColor(Color(255, 255, 255))
+								warningSupplies:SizeToContents()
+								warningSupplies:SetPos(500, 100)
+								surface.PlaySound( "Resource/warning.wav" )
+								timer.Simple(2, function()
+									if warningSupplies:IsValid()  then
+										warningSupplies:Remove()
+									end
+								end)
+							else
+								local warningPopulation = vgui.Create("DLabel")
+								warningPopulation:SetText(language.GetPhrase("hlw.warning.population"))
+								warningPopulation:SetFont("CloseCaption_Bold")
+								warningPopulation:SetColor(Color(255, 255, 255))
+								warningPopulation:SizeToContents()
+								warningPopulation:SetPos(500, 13)
+								surface.PlaySound( "Resource/warning.wav" )
+								timer.Simple(2, function()
+									if warningPopulation:IsValid() then
+										warningPopulation:Remove()
+									end
+								end)
+						end
+					end
+				end
+				
+			end)
+			timer.Simple(0.8, function()
+				if tutorialIcon:IsValid() and texto:IsValid()  then
+					arrowIcon:SetImage("half life wars resource/arrow.png")
+					arrowIcon:SetSize(106, 138)
+					arrowIcon:SetPos(45, 130)
+					arrowIcon.Think = effectArrowButton
+				end
+			end)
+
+		end)
+		net.Receive("RemoveImage", function()
+			bar:Remove()
+			supplyIcon:Remove()
+			populationIcon:Remove()
+			tutorialIcon:Remove()
+			gmanIcon:Remove()
+			texto:Remove()
+			citizenIcon:Remove()
+			arrowIcon:Remove()
+			rebelSuppliesLabel:Remove()
+			rebelPopulationLabel:Remove()
+		end)
+	end)
 
 end
