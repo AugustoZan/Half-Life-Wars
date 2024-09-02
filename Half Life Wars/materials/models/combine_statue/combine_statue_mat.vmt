@@ -1,0 +1,17 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/combine_statue/combine_statue_dif"
+	"$bumpmap" "models/combine_statue/combine_statue_norm"
+
+	"$normalmapalphaenvmapmask" 1
+	"$envmap" "env_cubemap"
+	"$envmaptint" 			"[1 0.7 0.4 ]"
+
+	"$phong" 			"1"
+	"$phongboost"			"1"
+	"$phongexponent"			"25"
+	"$phongtint"			"[0.8 0.5 0.2 ]"
+	"$phongfresnelranges"		"[1 2 3]"
+
+	"$halflambert" 			"1"
+}
