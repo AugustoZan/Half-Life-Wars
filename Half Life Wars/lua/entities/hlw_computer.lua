@@ -52,7 +52,7 @@ if SERVER then
     
         self.prop = ents.Create( "prop_physics" )
         self.prop:SetModel("models/props_lab/workspace004.mdl")
-        self.prop:SetPos(self:GetPos() + self:GetRight() * -15 + self:GetForward() * 35 + self:GetUp() * 5)
+        self.prop:SetPos(self:GetPos() + self:GetRight() * -15 + self:GetForward() * 38 + self:GetUp() * -2)
         self.prop:SetAngles(Angle(0, self:EyeAngles().y - 90, 0))
         self.prop:PhysicsInit(SOLID_VPHYSICS)
         self.prop:SetMoveType(MOVETYPE_VPHYSICS)

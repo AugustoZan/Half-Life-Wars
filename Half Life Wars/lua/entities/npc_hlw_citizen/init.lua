@@ -135,62 +135,62 @@ function ENT:Observar(npc)
 
     end
 end
-
-function ENT:Think()
+local citizenForward = false
+local computadora = nil
+function ENT:Piensa(computer)
+    --if computer == nil then return end
     if IsValid(self) and IsValid(self.npc) then
+		computadora = computer
         local npc = self.npc
-        local enemy = self.npc:GetEnemy()
-        local anim = self.npc:GetSequenceName(self.npc:GetSequence())
-        local act = self.npc:GetActivity()
         
-        -- Buscar la entidad 'hlw_computer' o 'hlw_computer2' en un radio de 1000 metros
-        local computers = ents.FindInSphere(self:GetPos(), 3000)
-        local target = nil
+        -- Create a table with a single element, the computer parameter
+        local computers = {computer}
         for _, computer in pairs(computers) do
-            if computer:GetClass() == "hlw_computer" or computer:GetClass() == "hlw_computer2" then
-                -- Verificar si hay un 'npc_citizen' cerca de la computadora
-                local citizens = ents.FindInSphere(computer:GetPos(), 1)
-                local hasCitizen = false
-                for _, citizen in pairs(citizens) do
-                    if citizen:GetClass() == "npc_citizen" and citizen ~= self.npc then
-                        hasCitizen = true
-                        break
-                    end
-                end
-                
-                -- Si no hay un 'npc_citizen' cerca, dirigirse hacia la computadora
-                if not hasCitizen then
-                    self.npc:SetLastPosition(computer:GetPos())
-                    self.npc:SetSchedule(SCHED_FORCED_GO)
-                    target = computer
-                    
-                    if (self.npc:GetPos():Distance(computer:GetPos()) < 1) then
-                        self.npc:SetAngles(computer:GetAngles())
-                        
-                        -- Evaluar qué función ejecutar según la entidad encontrada
-                        if computer:GetClass() == "hlw_computer" then
-                            self:Cargar(npc)
-                            self:IniciarCelebracion(npc)
-							
-                        elseif computer:GetClass() == "hlw_computer2" then
-                            self:Observar(npc)
-                            self:IniciarCelebracion(npc)
-							
-                        end
-
-                    end
-                    
+            -- Verificar si hay un 'npc_citizen' cerca de la computadora
+            local citizens = ents.FindInSphere(computer:GetPos(), 1)
+            local hasCitizen = false
+            for _, citizen in pairs(citizens) do
+                if citizen:GetClass() == "npc_citizen" and citizen ~= self.npc then
+                    hasCitizen = true
                     break
                 end
             end
+            
+            -- Si no hay un 'npc_citizen' cerca, dirigirse hacia la computadora
+            if not hasCitizen then
+				citizenForward = true
+            end
         end
-		if self.npc.hasComputer then
-			self:Cargar(npc)
-		end
-		if self.npc.hasComputer2 then
-			self:Observar(npc)
-		end
+        
+        if self.npc.hasComputer then
+            self:Cargar(npc)
+        end
+        if self.npc.hasComputer2 then
+            self:Observar(npc)
+        end
     end
+end
+function ENT:Think()
+if !self:IsValid() then return end
+  if citizenForward and self:IsValid() then
+
+		self.npc:SetLastPosition(computadora:GetPos())
+		self.npc:SetSchedule(SCHED_FORCED_GO)
+		
+		if (self.npc:GetPos():Distance(computadora:GetPos()) < 1) then
+			self.npc:SetAngles(computadora:GetAngles())
+			
+			-- Evaluar qué función ejecutar según la entidad encontrada
+			if computadora:GetClass() == "hlw_computer" then
+				self:Cargar(self.npc)
+				self:IniciarCelebracion(self.npc)
+				
+			elseif computadora:GetClass() == "hlw_computer2" then
+				self:Observar(self.npc)
+				self:IniciarCelebracion(self.npc)
+			end
+  		end
+end
 end
 
 function ENT:IniciarCelebracion(npc)

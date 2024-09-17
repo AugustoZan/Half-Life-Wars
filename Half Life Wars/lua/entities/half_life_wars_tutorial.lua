@@ -92,7 +92,7 @@ function ENT:Use( activator )
 	end
 end
 
-function ENT:StartRound(ent, estatua, deskProps, deskProp)		
+function ENT:StartRound(ent, estatua, escritorio, escritorio2, escritorio3, escritorio4)		
 	--ent:EmitSound("half_life_wars/round_start.wav")
 	local initial_cam_ang = ent:EyeAngles()
 	local playerPos = ent:GetPos()
@@ -148,9 +148,11 @@ function ENT:StartRound(ent, estatua, deskProps, deskProp)
 				net.Send(ent)
 			end
 			estatua:Remove()
-			for i, deskProps in ipairs(deskProps) do
-				deskProps:Remove()
-			end
+			escritorio:Remove()
+			escritorio2:Remove()
+			escritorio3:Remove()
+			escritorio4:Remove()
+
 			ent:RemoveFlags(FL_NOTARGET)
 			ent:GodDisable()
 			ent:SetPos(self:GetPos())
@@ -195,29 +197,67 @@ function ENT: Tutorial(ent)
 	local rebelPopulation = 0
 	local rebelPopulationTotal = 50
 	local estatua = ents.Create("npc_hlw_statue")
-	local deskProp = nil
-	local deskPositions = {
-		self:GetPos() + self:GetRight() * -1250 + self:GetForward() * 400 + self:GetUp() *-10,
-		self:GetPos() + self:GetRight() * -1250 + self:GetForward() * -400 + self:GetUp() *-10,
-		self:GetPos() + self:GetRight() * -1450 + self:GetForward() * 200 + self:GetUp() *-10,
-		self:GetPos() + self:GetRight() * -1450 + self:GetForward() * -200 + self:GetUp() *-10
-	}
-	
-	local deskProps = {}
-	
-	for i, pos in ipairs(deskPositions) do
-		deskProp = ents.Create("hlw_computer")
-		deskProp:SetPos(pos) -- Ahora pos es un vector
-		deskProp:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
-		deskProp:Spawn()
-		table.insert(deskProps, deskProp)
-	end
-	self:StartRound(ent, estatua, deskProps, deskProp)
+
+ 	--------------------ESCRITORIOS---------------------------------------------
+	local escritorio = ents.Create("hlw_computer")
+	escritorio:SetPos(self:GetPos() + self:GetRight() * -1450 + self:GetForward() * -200)
+	escritorio:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
+	escritorio:Spawn()
+	local escritorio2 = ents.Create("hlw_computer")
+	escritorio2:SetPos(self:GetPos() + self:GetRight() * -1450 + self:GetForward() * 200)
+	escritorio2:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
+	escritorio2:Spawn()
+	local escritorio3 = ents.Create("hlw_computer")
+	escritorio3:SetPos(self:GetPos() + self:GetRight() * -1250 + self:GetForward() * -400)
+	escritorio3:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
+	escritorio3:Spawn()
+	local escritorio4 = ents.Create("hlw_computer")
+	escritorio4:SetPos(self:GetPos() + self:GetRight() * -1250 + self:GetForward() * 400)
+	escritorio4:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
+	escritorio4:Spawn()
+	--------------------------------------------------------------------------------
+	self:StartRound(ent, estatua, escritorio, escritorio2, escritorio3, escritorio4)
     estatua:SetPos(self:GetPos() + self:GetRight() * -1600 + self:GetUp() * 40)
 	ent:SetPos(ent:GetPos() + self:GetRight() * -1600)
     estatua:Spawn()
 	estatua:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
-    
+
+	local function CountNPCsInRadius(pos, radius)
+		local count = 0
+		for _, ent in pairs(ents.FindInSphere(pos, radius)) do
+			if ent:IsNPC() and ent:GetClass() == "npc_hlw_citizen" then
+				count = count + 1
+			end
+		end
+		return count
+	end
+    if SERVER then
+		net.Receive( "hi_citizen", function( len, ply )
+			local hiCitizen = ents.Create("npc_hlw_citizen")
+			hiCitizen:SetPos(self:GetPos() + self:GetRight() * -1600 + self:GetForward() * -200)
+			hiCitizen:Spawn()
+
+			if CountNPCsInRadius(escritorio:GetPos(), 40) < 2 then
+				hiCitizen:Piensa(escritorio)
+			else
+				if CountNPCsInRadius(escritorio2:GetPos(), 40) < 2 then
+					hiCitizen:Piensa(escritorio2)
+				else
+					if CountNPCsInRadius(escritorio3:GetPos(), 40) < 2 then
+						hiCitizen:Piensa(escritorio3)
+					else
+						hiCitizen:Piensa(escritorio4)
+					end
+				end
+			end
+			--hiCitizen:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
+			net.Receive( "bye_citizen", function( len, ply )
+				if hiCitizen:IsValid() then
+					hiCitizen:Remove()
+				end
+			end )
+		end )
+	end
 	timer.Simple(0.45, function()
         if SERVER then
             util.AddNetworkString("DrawImage")
@@ -416,16 +456,10 @@ if SERVER then
 		self:SetDTVector( slot, vec )
 	end
 	
+	util.AddNetworkString( "hi_citizen" )
+	util.AddNetworkString( "bye_citizen" )
 	function ENT:Think()
-		util.AddNetworkString( "hi_citizen" )
-		net.Receive( "hi_citizen", function( len, ply )
-			print( "XD" )
-			local hiCitizen = ents.Create("npc_hlw_citizen")
-			hiCitizen:SetPos(self:GetPos())
-			--hiCitizen:SetPos(self:GetPos() * -400 + self:GetRight() * -1600 + self:GetUp() * 5)
-			hiCitizen:Spawn()
-			--hiCitizen:SetAngles(Angle(0, ent:EyeAngles().y - 90, 0))
-		end )
+
 	end
 
  ----------------------------------------------------------------------------------------------------------------------------------------------
@@ -559,10 +593,12 @@ if CLIENT then
 		gmanIcon:SetImage("half life wars resource/gman.png")
 		gmanIcon:SetSize(223, 219)
 		gmanIcon:SetPos(100, 475)
+		gmanIcon:SetAlpha(0)
 		
 		local citizenIcon = vgui.Create("DImageButton")
 
 		local arrowIcon = vgui.Create("DImage")
+		arrowIcon:SetAlpha(255)
 
 		local rebelSuppliesLabel = vgui.Create("DLabel")
 		rebelSuppliesLabel:SetText(rebelSupply)
@@ -582,74 +618,78 @@ if CLIENT then
 
 		hlw_tutorial_move = language.GetPhrase("hlw.tutorial.move"):gsub("+moveright", string.upper(input.LookupBinding( "+moveright" )))
 		hlw_tutorial_move2 = language.GetPhrase("hlw.tutorial.move2"):gsub("+moveleft", string.upper(input.LookupBinding( "+moveleft" )))
-		texto:SetText(hlw_tutorial_move .. " " .. hlw_tutorial_move2)
 		texto:SetFont("CloseCaption_Bold") -- Establecer la fuente del texto
 		texto:SetColor(Color(255, 255, 255)) -- Establecer el color del texto
-		texto:SizeToContents()
-		texto:SetPos(ScrW() + texto:GetWide() + 15, 475)
-		local animTime = 0.5 -- Tiempo de animación en segundos
-		local startTime = CurTime() -- Tiempo de inicio de la animación
-		local currentTime = CurTime()
-		local progress = (currentTime - startTime) / animTime
-		local newX = Lerp(progress, ScrW() + tutorialIcon:GetWide(), ScrW() / 2 - tutorialIcon:GetWide() / 2) 
-		-- Función Think para actualizar la posición de la imagen
-		local function thinkOriginal()
-			currentTime = CurTime()
-			progress = (currentTime - startTime) / animTime
-			newX = Lerp(progress, ScrW() + tutorialIcon:GetWide(), ScrW() / 2 - tutorialIcon:GetWide() / 2) -- Interpolar entre la posición inicial y la posición final
-			tutorialIcon:SetPos(newX, 450)
-			texto:SetPos(newX + 30, 475)
-			if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
-				tutorialIcon.Think = nil
-				texto.Think = nil
-			end
-
-			local function thinkFadeIn()
-				currentTime = CurTime()
-				progress = (currentTime - startTime) / animTime
-				alpha = Lerp(progress, 0, 255) -- Interpolar entre la transparencia inicial (0) y la transparencia final (255)
-				gmanIcon:SetAlpha(alpha)
-				if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
-					gmanIcon.Think = nil
+		texto:SetText(hlw_tutorial_move .. " " .. hlw_tutorial_move2)
+		texto:SetPos(ScrW() + texto:GetWide() + 30, 475)
+		texto:SetAutoStretchVertical(true)
+		local function incomingTextBox()
+			texto:SizeToContents()
+			local animTime = 0.5
+			local startTime = CurTime()
+			local endX = ScrW() / 2 - tutorialIcon:GetWide() / 2  -- Posición final en el centro de la pantalla
+	
+			-- Crear un temporizador para actualizar la animación
+			timer.Create("IncomingAnimationTimer", 0.01, 0, function()
+				local currentTime = CurTime()
+				local _, textposY = texto:GetPos()
+				local progress = (currentTime - startTime) / animTime
+				if progress >= 1 then
+					progress = 1
+					timer.Remove("IncomingAnimationTimer")
 				end
-			end
-			thinkFadeIn()
+	
+				-- Interpolación de posiciones
+				local newX = Lerp(progress, ScrW() + tutorialIcon:GetWide(), endX)
+				tutorialIcon:SetPos(newX, 450)
+				texto:SetPos(newX + 30, textposY)
+	
+				-- Animación de desvanecimiento (fade in)
+				local alphaProgress = (currentTime - startTime) / animTime
+				local alpha = Lerp(alphaProgress, 0, 255)
+				if gmanIcon:GetAlpha() != 255 then
+					gmanIcon:SetAlpha(alpha)
+					if alphaProgress >= 1 then
+						gmanIcon:SetAlpha(255)
+					end
+				end
+			end)
 		end
 	
-		tutorialIcon.Think = thinkOriginal -- Asignar la función Think original a la imagen
-		texto.Think = thinkOriginal
+		incomingTextBox()
 		net.Receive("PhaseII", function()
 			surface.PlaySound("buttons/button14.wav")
-			local animTime = 0.5 -- Tiempo de animación en segundos
-			local startTime = CurTime() -- Tiempo de inicio de la animación
-		
+			local citizenLore = false
 			-- Función Think para actualizar la posición de la imagen
-			local function thinkExit()
-				local currentTime = CurTime()
-				local progress = (currentTime - startTime) / animTime
-				local _, posY = tutorialIcon:GetPos()
-				local startX, _ = tutorialIcon:GetPos() -- Obtener la posición x inicial de tutorialIcon
-				local newX = Lerp(progress, startX, -tutorialIcon:GetWide()) -- Interpolar hacia la izquierda
-				tutorialIcon:SetPos(newX, posY) -- Asignar la nueva posición x y la posición y actual de tutorialIcon
-				
-				local _, posYTexto = texto:GetPos()
-				local startXTexto, _ = texto:GetPos() -- Obtener la posición x inicial de texto
-				local newXTexto = Lerp(progress, startXTexto, -texto:GetWide()) -- Interpolar hacia la izquierda
-				texto:SetPos(newXTexto, posYTexto) -- Asignar la nueva posición x y la posición y actual de texto
-				
-				if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
-					tutorialIcon.Think = nil
-					texto.Think = nil
-				end
+			local function startExitAnimation()
+				local animTime = 0.5
+				local startTime = CurTime()
+				local endX = -tutorialIcon:GetWide()
+			
+				timer.Create("ExitAnimationTimer", 0.01, 0, function()
+					local currentTime = CurTime()
+					local _,posY = tutorialIcon:GetPos()
+					local _,posiY = texto:GetPos()
+					local progress = (currentTime - startTime) / animTime
+					
+					if progress >= 1 then
+						progress = 1
+						timer.Remove("ExitAnimationTimer")
+					end
+					
+					local newX = Lerp(progress, tutorialIcon:GetPos(), endX)
+					tutorialIcon:SetPos(newX, posY)
+					texto:SetPos(newX + 30, posiY)
+				end)
 			end
+
 			if tutorialIcon:IsValid() and texto:IsValid() then
-				tutorialIcon.Think = thinkExit -- Asignar la función ThinkExit a la imagen
-				texto.Think = thinkExit
+				startExitAnimation()
 			end
 
 			local function effectCitizenButton()
 				currentTime = CurTime()
-				progress = (currentTime - startTime) / animTime
+				progress = (currentTime - startTime) / 0.5
 				alpha = Lerp(progress, 0, 255) -- Interpolar entre la transparencia inicial (0) y la transparencia final (255)
 				citizenIcon:SetAlpha(alpha)
 				if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
@@ -680,19 +720,7 @@ if CLIENT then
 				if tutorialIcon:IsValid() and texto:IsValid()  then
 					startTime = CurTime()
 					texto:SetText(language.GetPhrase("hlw.tutorial.citizen"))
-					local function thinkOriginalII()
-						currentTime = CurTime()
-						progress = (currentTime - startTime) / animTime
-						newX = Lerp(progress, ScrW() + tutorialIcon:GetWide(), ScrW() / 2 - tutorialIcon:GetWide() / 2) -- Interpolar entre la posición inicial y la posición final
-						tutorialIcon:SetPos(newX, 450)
-						texto:SetPos(newX + 30, 435)
-						if progress >= 1 then -- Si la animación ha terminado, eliminar la función Think
-							tutorialIcon.Think = nil
-							texto.Think = nil
-						end
-					end
-					tutorialIcon.Think = thinkOriginalII -- Llamar a la función Think original nuevamente
-					texto.Think = thinkOriginalII
+					incomingTextBox()
 
 					citizenIcon:SetImage("half life wars resource/supplier.png")
 					citizenIcon:SetSize(150, 128)
@@ -738,7 +766,24 @@ if CLIENT then
 									citizenAmount = citizenAmount - 1
 									surface.PlaySound( "Half_Life_Wars/unit_ready.wav" )
 									net.Start( "hi_citizen" )
-								net.SendToServer()
+									net.SendToServer()
+									if !citizenLore  then
+										timer.Simple(1, function()
+											if !tutorialIcon:IsValid() then return end
+											surface.PlaySound("buttons/button14.wav")
+											startExitAnimation()
+											citizenLore = true
+											timer.Simple(0.3, function()
+												if !tutorialIcon:IsValid() then return end
+												texto:SetText(language.GetPhrase("hlw.tutorial.citizen.ex"))
+												incomingTextBox()
+											end)
+										end)
+
+
+									else 
+										print("Citizen fake")
+									end
 								end
 							end)
 							local function animate()
@@ -801,6 +846,8 @@ if CLIENT then
 
 		end)
 		net.Receive("RemoveImage", function()
+			net.Start( "bye_citizen" )
+			net.SendToServer()
 			bar:Remove()
 			supplyIcon:Remove()
 			populationIcon:Remove()
